@@ -1,0 +1,23 @@
+target_industries:
+  - B2B SaaS
+  - fintech
+  - developer tools
+
+target_size_buckets:
+  - "11-50"
+  - "51-200"
+
+positive_signals:
+  - actively hiring engineers
+  - lists enterprise customers
+  - has a clear pricing page
+  - mentions recent funding round
+
+negative_signals:
+  - looks dormant / no recent updates
+  - purely local/offline business with no software angle
+  - already a large enterprise (1000+) unlikely to need a Werkstudent-built agent
+
+notes: >
+  We're looking for mid-size, software-first companies that would plausibly
+  need outreach/research automation, not solo consultancies or giant incumbents.
