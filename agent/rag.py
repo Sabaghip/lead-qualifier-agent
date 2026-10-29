@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import math
 
+from langsmith import traceable
+
 from agent.llm import fake_mode
 
 # A tiny seed corpus of (observed signal -> good icebreaker) pairs. In a real
@@ -80,6 +82,7 @@ class ExampleBank:
         self._icebreakers = [ice for _, ice in EXAMPLE_BANK]
         self._embeddings = _embed(self._facts)
 
+    @traceable(name="rag_retrieve", run_type="retriever")
     def retrieve(self, query: str, k: int = 2) -> list[tuple[str, str]]:
         query_vec = _embed([query])[0]
         scored = sorted(

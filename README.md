@@ -128,3 +128,38 @@ OPENAI_API_KEY=sk-... python -m agent.cli_v2 https://example.com --icp icp.examp
 proceeding, the hard iteration cap overriding an agent that never wants to
 finish, and graceful degradation on an unreachable site — all via a stub
 session, no real browser or API calls needed.
+
+### Tracing with LangSmith
+
+Every LLM call already traces automatically through LangChain once tracing
+is enabled — no code changes needed for those. The non-LLM steps
+(`BrowserSession.fetch`, `ExampleBank.retrieve`) and each graph node
+(`init`, `research_step`, `extract`, `match`, `outreach`) are explicitly
+wrapped with `@traceable` so the *whole* pipeline shows up as one nested run
+tree, not just the raw model calls.
+
+1. Sign up at [smith.langchain.com](https://smith.langchain.com) and create
+   an API key (Settings → API Keys). You do this yourself — nothing here
+   creates the account for you.
+2. Set these env vars (see `.env.example`):
+   ```bash
+   export LANGSMITH_TRACING=true
+   export LANGSMITH_API_KEY=lsv2_...
+   export LANGSMITH_PROJECT=lead-qualifier-agent-v2
+   ```
+3. Run normally — tracing is picked up automatically, no flag needed:
+   ```bash
+   OPENAI_API_KEY=sk-... python -m agent.cli_v2 https://example.com --icp icp.example.yaml
+   ```
+4. Open the project in the LangSmith UI. One `graph.invoke()` call shows as
+   a single trace, expandable into: `init` → `research_step` (possibly
+   several times, each showing its own `browser_fetch` call and, on real
+   runs, a `research_decide` LLM call with the exact prompt/response) →
+   `extract` (LLM call) → `match` (LLM call) → `outreach` (its
+   `rag_retrieve` call, then the final LLM call) — with latency and token
+   usage attached to every individual step.
+
+Leave the env vars unset (or `AGENT_FAKE_LLM=1`, which never reaches a real
+API anyway) and tracing is simply inert — `@traceable` no-ops with no
+network calls, which is why the test suite and fake-mode runs are
+unaffected either way.

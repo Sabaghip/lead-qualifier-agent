@@ -3,6 +3,7 @@ from __future__ import annotations
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
+from langsmith import traceable
 
 from agent.browser_session import BrowserSession
 from agent.extractor import extract_company_profile
@@ -42,6 +43,7 @@ def _fake_decide(state: ResearchState) -> ResearchDecision:
     return ResearchDecision(action="scrape", url=candidates[0], reasoning="fake-mode: scraping next candidate")
 
 
+@traceable(name="research_decide", run_type="chain")
 def _real_decide(state: ResearchState) -> ResearchDecision:
     visited_summary = "\n".join(f"- {url}: {text[:150]}..." for url, text in state.get("pages", {}).items())
     candidates = state.get("candidate_links", [])[:10]
@@ -67,6 +69,7 @@ def build_graph(session: BrowserSession):
     proceeds to extract -> match -> outreach.
     """
 
+    @traceable(name="init", run_type="chain")
     def init_node(state: ResearchState) -> dict:
         text, links, err = session.fetch(state["url"])
         errors = (state.get("errors") or []) + ([err] if err else [])
@@ -79,6 +82,7 @@ def build_graph(session: BrowserSession):
             "errors": errors,
         }
 
+    @traceable(name="research_step", run_type="chain")
     def research_step_node(state: ResearchState) -> dict:
         # Cheap check before spending an LLM call: nothing left to look at.
         if not state.get("candidate_links"):
@@ -120,18 +124,21 @@ def build_graph(session: BrowserSession):
             return "extract"
         return "research_step"
 
+    @traceable(name="extract", run_type="chain")
     def extract_node(state: ResearchState) -> dict:
         if not state.get("pages"):
             return {"errors": state.get("errors", []) + ["no pages to extract from, skipping"]}
         company = extract_company_profile(state["url"], state["pages"])
         return {"company": company}
 
+    @traceable(name="match", run_type="chain")
     def match_node(state: ResearchState) -> dict:
         if not state.get("company"):
             return {"errors": state.get("errors", []) + ["no company profile to match, skipping"]}
         result = match_against_icp(state["company"], state["icp"])
         return {"match_result": result}
 
+    @traceable(name="outreach", run_type="chain")
     def outreach_node(state: ResearchState) -> dict:
         if not state.get("company") or not state.get("match_result"):
             return {"errors": state.get("errors", []) + ["no company/match to draft outreach from, skipping"]}

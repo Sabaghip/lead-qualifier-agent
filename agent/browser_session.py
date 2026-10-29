@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
+from langsmith import traceable
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
@@ -42,12 +43,17 @@ class BrowserSession:
         self._page = self._context.new_page()
         self._page.set_default_navigation_timeout(NAV_TIMEOUT_MS)
 
+    @traceable(name="browser_fetch", run_type="tool")
     def fetch(self, url: str) -> tuple[str, list[str], str | None]:
         """Returns (text, same-domain links found on the page, error-or-None).
 
         Links are normalized (fragment and trailing slash stripped) and
         deduped, so e.g. a "#pricing" anchor on the homepage isn't treated
         as a separate page from the homepage itself.
+
+        Decorated with @traceable so, when LangSmith tracing is enabled, each
+        page fetch shows up as its own named run (inputs: url, outputs: text
+        length / links / error) nested under whichever graph node called it.
         """
         try:
             self._page.goto(url, wait_until="domcontentloaded")
