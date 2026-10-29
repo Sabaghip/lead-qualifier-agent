@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -41,4 +41,39 @@ class AgentState(TypedDict, total=False):
     pages: dict[str, str]
     company: CompanyProfile
     match_result: MatchResult
+    errors: list[str]
+
+
+# --- v2: agentic research loop + outreach drafting -------------------------
+
+
+class ResearchDecision(BaseModel):
+    """What the research agent decides to do next, given what it's found so far."""
+
+    action: Literal["scrape", "finish"] = Field(
+        description="'scrape' to fetch one more candidate link, 'finish' if enough has been gathered"
+    )
+    url: str | None = Field(
+        default=None, description="Which candidate URL to scrape next, required when action='scrape'"
+    )
+    reasoning: str = Field(description="One sentence on why this action was chosen")
+
+
+class OutreachDraft(BaseModel):
+    icebreaker: str = Field(description="One personalized opening line referencing a specific found fact")
+    based_on_signal: str = Field(description="Which specific signal/fact the icebreaker references")
+    status: Literal["draft_needs_human_review"] = "draft_needs_human_review"
+
+
+class ResearchState(TypedDict, total=False):
+    url: str
+    icp: ICP
+    pages: dict[str, str]
+    visited: list[str]
+    candidate_links: list[str]
+    iterations: int
+    research_done: bool
+    company: CompanyProfile
+    match_result: MatchResult
+    outreach: OutreachDraft
     errors: list[str]

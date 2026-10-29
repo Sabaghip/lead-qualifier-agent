@@ -69,3 +69,62 @@ they're fast and don't need network access or an API key.
   LLM call on obvious non-matches
 - No persistence — each run is stateless; a real outreach pipeline would
   dedupe against previously-seen companies
+
+## v2 (branch `v2-agentic-outreach`): a genuinely agentic loop + RAG + outreach drafting
+
+v1 above is a **prompt-chaining workflow** — a fixed sequence (`scrape → extract
+→ match`), not an autonomous agent, even though it's built with LangGraph. v2
+closes that gap and the other two gaps v1 had: no outreach step, no RAG.
+
+```
+init (fetch homepage)
+  → research_step  ──┐  (LLM decides: scrape one more candidate link, or finish)
+       ↑              │
+       └──────────────┘  (loops back to itself — a real cycle, capped at MAX_ITERATIONS)
+  → extract → match → outreach (RAG-grounded icebreaker, tagged draft_needs_human_review)
+```
+
+**What's actually new:**
+
+- **`agent/browser_session.py`** — a single Playwright session kept open and
+  driven one `fetch()` call at a time, instead of v1's fixed one-shot crawl.
+  URLs are normalized (fragment + trailing slash stripped) before dedup —
+  found this the hard way when a `#pricing` anchor on the homepage was
+  initially treated as a separate page from the homepage itself.
+- **`agent/graph_v2.py`** — `research_step` is a real `add_conditional_edges`
+  cycle: after each fetch, an LLM call decides `scrape` (pick one more
+  candidate link) or `finish`, routing back to itself or forward to
+  `extract`. `MAX_ITERATIONS` is a hard cap enforced in the routing function
+  itself, independent of what the LLM decides — so an agent that "never
+  wants to stop" still terminates (covered by
+  `test_v2_hard_iteration_cap_stops_an_agent_that_never_wants_to_finish`).
+  There's also a cheap guard before every decide call: if there are no
+  candidate links left, skip the LLM call entirely rather than paying for a
+  decision with only one possible answer.
+- **`agent/rag.py`** — an actual (if hand-rolled, in-memory) retrieval step:
+  a tiny seed corpus of `(observed signal → good icebreaker)` pairs gets
+  embedded, and the top-k most similar examples to the current company's
+  signals are retrieved and used as style grounding before generating a new
+  icebreaker. A real system would swap this for pgvector/Chroma/Pinecone —
+  the mechanics (embed → cosine similarity → top-k) are identical either way.
+- **`agent/outreach.py`** — generates one personalized icebreaker line
+  referencing a specific scraped signal, at `temperature=0.4` (not `0` like
+  extraction/matching — a little variation is appropriate for writing, not
+  for extracting facts). The output schema's `status` field is hardcoded to
+  `"draft_needs_human_review"` — it is never wired to anything that sends a
+  message. For an *outreach* agent specifically, that's a deliberate
+  guardrail, not an oversight: autonomous outbound messaging is a
+  reputational/compliance risk, not just a quality number.
+
+**Run it:**
+
+```bash
+AGENT_FAKE_LLM=1 python -m agent.cli_v2 https://example.com --icp icp.example.yaml
+# or, with a real key:
+OPENAI_API_KEY=sk-... python -m agent.cli_v2 https://example.com --icp icp.example.yaml
+```
+
+**Tests:** `tests/test_graph_v2.py` covers the loop actually cycling before
+proceeding, the hard iteration cap overriding an agent that never wants to
+finish, and graceful degradation on an unreachable site — all via a stub
+session, no real browser or API calls needed.
