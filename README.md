@@ -147,6 +147,13 @@ tree, not just the raw model calls.
    export LANGSMITH_API_KEY=lsv2_...
    export LANGSMITH_PROJECT=lead-qualifier-agent-v2
    ```
+   Don't also set `LANGSMITH_AGENT_ID`/`LANGSMITH_AGENT_ENVIRONMENT` - those
+   belong to LangSmith's separate "Agent" monitoring feature, and having both
+   an agent address and a project set at once is an explicit conflict the
+   SDK refuses to resolve (every trace callback fails with an
+   `EnvAddressError` instead). LangSmith's own onboarding page suggests
+   setting all of these together for its Deep Agents quickstart - don't copy
+   that block verbatim for this project.
 3. Run normally — tracing is picked up automatically, no flag needed:
    ```bash
    OPENAI_API_KEY=sk-... python -m agent.cli_v2 https://example.com --icp icp.example.yaml
