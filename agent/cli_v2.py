@@ -1,19 +1,26 @@
 from __future__ import annotations
 
-import argparse
-import json
-import sys
-
 from dotenv import load_dotenv
 
-from agent.browser_session import BrowserSession
-from agent.cli import load_icp
-from agent.graph_v2 import build_graph
+# Must run before importing anything LangChain/LangGraph/LangSmith-related.
+# langsmith.utils.get_env_var() is @lru_cache'd, and something in that import
+# chain calls it (to check whether tracing is enabled) before this module's
+# own imports finish - so if load_dotenv() runs after those imports (e.g.
+# inside main()), the cache gets primed with pre-.env empty values and
+# LANGSMITH_TRACING/LANGSMITH_PROJECT from .env are silently ignored for the
+# rest of the process, even though os.environ does get updated correctly.
+load_dotenv()
+
+import argparse  # noqa: E402
+import json  # noqa: E402
+import sys  # noqa: E402
+
+from agent.browser_session import BrowserSession  # noqa: E402
+from agent.cli import load_icp  # noqa: E402
+from agent.graph_v2 import build_graph  # noqa: E402
 
 
 def main() -> None:
-    load_dotenv()
-
     parser = argparse.ArgumentParser(
         description="Agentic research -> qualify -> draft outreach pipeline (v2)."
     )
